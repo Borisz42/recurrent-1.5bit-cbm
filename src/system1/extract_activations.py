@@ -11,6 +11,10 @@ try:
 except ImportError:
     HAS_UNSLOTH = False
 
+import sys
+# Add project root to python path to resolve src imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
 import torch.nn as nn
 from datasets import load_dataset
 from tqdm import tqdm
