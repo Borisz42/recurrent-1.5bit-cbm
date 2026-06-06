@@ -46,9 +46,23 @@ def train(args):
     else:
         print("Warning: Unsloth is not installed. Falling back to standard HuggingFace transformers and PEFT.")
         tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+            
+        if args.load_in_4bit:
+            from transformers import BitsAndBytesConfig
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True
+            )
+        else:
+            quantization_config = None
+
         model = AutoModelForCausalLM.from_pretrained(
             args.model_name,
-            load_in_4bit=args.load_in_4bit,
+            quantization_config=quantization_config,
             device_map="auto" if torch.cuda.is_available() else None,
             torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
         )
