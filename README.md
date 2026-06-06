@@ -91,23 +91,31 @@ $$z_{CMR} = \frac{z_{T-TRM} + 1}{2}$$
 
 ```
 .
+├── docker/
+│   └── Dockerfile.eval           # Sandboxed HumanEval benchmarking configuration
 ├── notebooks/
-│   └── kaggle_master_run.ipynb   # SFT, Activation Caching, HybridCBM training & Concept Translation
+│   ├── kaggle_master_run.ipynb   # Master notebook for general models (DeepSeek-R1-Distill-Qwen)
+│   └── coder_master_run.ipynb    # Master notebook for coder models (Qwen2.5-Coder)
 ├── src/
 │   ├── system1/
 │   │   ├── hook_extractor.py     # Detached activation forward hooks
-│   │   ├── hybrid_cbm.py         # Hybrid CBM with Tanh bounding & CLIP translation
+│   │   ├── hybrid_cbm.py         # Hybrid CBM with Tanh bounding, CLIP, and custom static concepts (DEFAULT/CODER)
 │   │   ├── train_sft.py          # Supervised Fine-Tuning CLI script
 │   │   ├── extract_activations.py # Chunked activation extraction script
 │   │   └── conceptnet_harvester.py # ConceptNet relation scraper & domain classifier
 │   ├── t_trm/
 │   │   ├── __init__.py
 │   │   ├── loop.py               # DTLGN Gate, Neuron, Layer, and T-TRM loop
-│   │   └── train_trm.py          # Standalone T-TRM loop training
-│   └── cmr/
-│       ├── logic.py              # Product & Gödel T-Norms, Concept Embeddings
-│       ├── rule_module.py        # Rule categorical decoders
-│       └── model.py              # CMR Model and PyTorch Lightning wrappers
+│   │   └── train_trm.py          # Standalone T-TRM loop training supporting --concepts_type
+│   ├── cmr/
+│   │   ├── logic.py              # Product & Gödel T-Norms, Concept Embeddings
+│   │   ├── rule_module.py        # Rule categorical decoders
+│   │   └── model.py              # CMR Model and PyTorch Lightning wrappers
+│   └── eval/
+│       ├── baseline.py           # Black-box task predictor baseline
+│       ├── run_tests.py          # Post-training neuro-symbolic testing suite (CUE, Adversarial, etc.)
+│       ├── run_coder_eval.py     # Safe, dockerized generative coding benchmark evaluator (HumanEval)
+│       └── chatbot_app.py        # Interactive Gradio/CLI steered chatbot application
 ├── plan.md                       # Technical viability and math blueprint
 └── requirements.txt              # Dependency specifications
 ```
@@ -174,6 +182,16 @@ translated_labels, similarities = hybrid_cbm.translate_dynamic_concepts(candidat
 ### Stage 4: T-TRM Loop & Rule Hardening
 Instantiate the `TTRMLoop` to coordinate DTLGN latent steps and CMR rule updates, optimizing with NM, IM, and routing commitment regularizers.
 
+For the general text model (default concepts):
+```bash
+python src/t_trm/train_trm.py --cache_dir "./cached_activations" --hybrid_cbm_path "./hybrid_cbm.pt" --output_dir "./t_trm_outputs"
+```
+
+For the coder model (30 static coder concepts + 20 dynamic concepts):
+```bash
+python src/t_trm/train_trm.py --cache_dir "./cached_coder_activations" --hybrid_cbm_path "./hybrid_cbm_coder.pt" --concepts_type coder --n_dynamic 20 --output_dir "./t_trm_coder_outputs"
+```
+
 ---
 
 ## 🤖 Using the Model (Local Chatbot Inference)
@@ -224,14 +242,37 @@ To publish the model so others can use it:
 
 To empirically validate the faithfulness and stability of the trained model, we provide a dedicated testing script that operates on the cached evaluation data:
 
+For the general text model:
 ```bash
 python src/eval/run_tests.py --cache_dir "./cached_activations" --model_dir "./t_trm_outputs"
+```
+
+For the coder model (30 static concepts, 20 dynamic concepts):
+```bash
+python src/eval/run_tests.py --cache_dir "./cached_coder_activations" --concepts_type coder --n_dynamic 20 --model_dir "./t_trm_coder_outputs"
 ```
 
 The evaluation suite performs three major checks:
 1. **Faithfulness & CUE Metric:** Trains a standard neural network (`BlackBoxBaseline`) directly on Layer 14 activations and compares its accuracy against our Concept Bottleneck. A CUE score > 0.90 proves the bottleneck is fully utilized and not leaking statistical variance.
 2. **Adversarial Steering:** Verifies the temporal stability of the T-TRM loop by injecting Gaussian noise into activations and testing predicate dropout (masking active concepts). This ensures the model degrades gracefully (abstains) rather than confidently hallucinating.
 3. **Rule Extraction:** Physically extracts and prints the highest confidence logic rules learned by the CMR module, proving that the decision-making process is human-auditable.
+
+### 💻 Coder Model & HumanEval Benchmark (Safe Dockerized Evaluation)
+
+For structured code generation, the model is evaluated on the standard **HumanEval** benchmark. To ensure complete safety from executing untrusted LLM-generated code locally on the host machine, the evaluation executes within an isolated, sandboxed Docker container using the official OpenAI HumanEval harness.
+
+First, ensure Docker is running, then execute the evaluation runner:
+```bash
+# Evaluate the base coder model
+python src/eval/run_coder_eval.py --model_name "unsloth/Qwen2.5-Coder-1.5B-Instruct-bnb-4bit" --output_dir "./eval_outputs_base"
+
+# Evaluate the SFT fine-tuned coder model
+python src/eval/run_coder_eval.py --model_name "unsloth/Qwen2.5-Coder-1.5B-Instruct-bnb-4bit" --adapter_dir "./adapters_coder" --output_dir "./eval_outputs_sft"
+```
+The script will automatically:
+1. Build the sandboxed Docker image `humaneval-evaluator` from `docker/Dockerfile.eval`.
+2. Generate completions for the HumanEval prompts using standard Hugging Face/Unsloth token generation.
+3. Run the Docker container, mounting the completions directory, to safely calculate and print the `pass@1` score.
 
 ---
 
