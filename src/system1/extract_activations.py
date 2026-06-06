@@ -1,6 +1,15 @@
+import sys
 import os
-# Force single-GPU visibility to prevent bitsandbytes illegal memory access crashes on dual-GPU systems
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
+# Parse rank dynamically from sys.argv before importing torch or unsloth to isolate the GPU process
+gpu_id = "0"
+for i, arg in enumerate(sys.argv):
+    if arg == "--rank" and i + 1 < len(sys.argv):
+        gpu_id = sys.argv[i + 1]
+        break
+
+os.environ["CUDA_VISIBLE_DEVICES"] = gpu_id
+
 import argparse
 import torch
 
@@ -106,6 +115,10 @@ def extract(args):
         dataset = dataset.select(range(min(20, len(dataset))))
         print(f"Debug mode: subsetting dataset to {len(dataset)} examples.")
 
+    if args.world_size > 1:
+        print(f"Sharding dataset: rank {args.rank} of {args.world_size} workers")
+        dataset = dataset.shard(num_shards=args.world_size, index=args.rank, contiguous=True)
+
     os.makedirs(args.output_dir, exist_ok=True)
     
     batch_size = args.batch_size
@@ -142,7 +155,7 @@ def extract(args):
             
             # Save chunk and flush RAM if capacity reached
             if chunk_samples >= chunk_size or (i + batch_size) >= len(dataset):
-                chunk_filepath = os.path.join(args.output_dir, f"chunk_{chunk_idx}.safetensors")
+                chunk_filepath = os.path.join(args.output_dir, f"chunk_rank{args.rank}_{chunk_idx}.safetensors")
                 
                 # Concatenate along batch dimension (dim=0)
                 activations = extractor.get_concatenated_activations(dim=0)
@@ -172,5 +185,7 @@ if __name__ == "__main__":
     parser.add_argument("--chunk_size", type=int, default=100, help="Number of samples per saved safetensors file")
     parser.add_argument("--no_unsloth", action="store_true", help="Force standard transformers instead of unsloth")
     parser.add_argument("--debug", action="store_true", help="Debug mode with subset data")
+    parser.add_argument("--rank", type=int, default=0, help="Rank of the current process (GPU ID)")
+    parser.add_argument("--world_size", type=int, default=1, help="Total number of parallel processes (GPUs)")
     args = parser.parse_args()
     extract(args)

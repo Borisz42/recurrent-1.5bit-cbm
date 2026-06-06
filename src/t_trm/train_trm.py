@@ -94,7 +94,13 @@ def train_trm_pipeline(args):
         
     # Create Dataloader
     dataset = TensorDataset(activations, c_probs, y_tasks)
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
+    dataloader = DataLoader(
+        dataset, 
+        batch_size=args.batch_size, 
+        shuffle=True, 
+        num_workers=args.num_workers, 
+        pin_memory=(device == "cuda")
+    )
     
     # 4. Instantiate CMR and TTRMLoop
     emb_size = 128
@@ -243,6 +249,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=4, help="Batch size for training")
     parser.add_argument("--lr", type=float, default=0.01, help="Learning rate")
+    parser.add_argument("--num_workers", type=int, default=0, help="Number of worker processes for data loading")
     parser.add_argument("--debug", action="store_true", help="Run in debug mode with minimal samples")
     
     args = parser.parse_args()
