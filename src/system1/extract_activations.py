@@ -1,19 +1,22 @@
 import os
 import argparse
 import torch
+
+# Import unsloth first to ensure all optimizations are applied correctly
+try:
+    from unsloth import FastLanguageModel
+    HAS_UNSLOTH = True
+except ImportError:
+    HAS_UNSLOTH = False
+
 import torch.nn as nn
 from datasets import load_dataset
 from tqdm import tqdm
 from safetensors.torch import save_file
 from src.system1.hook_extractor import ActivationHookExtractor
-
-try:
-    from unsloth import FastLanguageModel
-    HAS_UNSLOTH = True
-except ImportError:
+if not HAS_UNSLOTH:
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
-    HAS_UNSLOTH = False
 
 def find_layers_path(model):
     """

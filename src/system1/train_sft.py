@@ -1,15 +1,19 @@
 import os
 import argparse
 import torch
-from datasets import load_dataset
-from transformers import TrainingArguments
+
+# Import unsloth first to ensure all optimizations are applied correctly
 try:
     from unsloth import FastLanguageModel
     HAS_UNSLOTH = True
 except ImportError:
+    HAS_UNSLOTH = False
+
+from datasets import load_dataset
+from transformers import TrainingArguments
+if not HAS_UNSLOTH:
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import LoraConfig, get_peft_model
-    HAS_UNSLOTH = False
 from trl import SFTTrainer
 
 def train(args):
