@@ -40,6 +40,10 @@ def train_trm_pipeline(args):
     if len(chunk_files) == 0:
         raise FileNotFoundError(f"No cached activation chunk files found in '{args.cache_dir}'.")
         
+    if args.max_chunks > 0:
+        print(f"Limiting loaded chunks to the first {args.max_chunks} files to prevent RAM overload.")
+        chunk_files = chunk_files[:args.max_chunks]
+        
     print(f"Loading activations from {len(chunk_files)} chunk files...")
     activations_list = []
     for f in chunk_files:
@@ -105,7 +109,7 @@ def train_trm_pipeline(args):
         batch_size=args.batch_size, 
         shuffle=True, 
         num_workers=args.num_workers, 
-        pin_memory=(device == "cuda")
+        pin_memory=False  # Disable pin_memory to prevent virtual memory swapping locks
     )
     
     # 4. Instantiate CMR and TTRMLoop
@@ -155,15 +159,18 @@ def train_trm_pipeline(args):
     t_trm.train()
     cmr_model.train()
     
+    # Force downstream tensors to match model parameter dtype to prevent dtype mismatch crashes
+    model_param_dtype = next(t_trm.parameters()).dtype
+    
     for epoch in range(args.epochs):
         epoch_loss = 0.0
         epoch_loss_y = 0.0
         epoch_loss_c = 0.0
         
         for batch_x, batch_c, batch_y in dataloader:
-            batch_x = batch_x.to(device)
-            batch_c = batch_c.to(device)
-            batch_y = batch_y.to(device)
+            batch_x = batch_x.to(device=device, dtype=model_param_dtype)
+            batch_c = batch_c.to(device=device, dtype=model_param_dtype)
+            batch_y = batch_y.to(device=device, dtype=model_param_dtype)
             
             optimizer.zero_grad()
             
@@ -228,8 +235,8 @@ def train_trm_pipeline(args):
     with torch.no_grad():
         # Evaluate first batch
         eval_x, eval_c, eval_y = next(iter(dataloader))
-        eval_x = eval_x.to(device)
-        eval_y = eval_y.to(device)
+        eval_x = eval_x.to(device=device, dtype=model_param_dtype)
+        eval_y = eval_y.to(device=device, dtype=model_param_dtype)
         
         _, _, c_pred_hard, y_pred_hard = t_trm(
             eval_x, 
@@ -257,6 +264,8 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=0.01, help="Learning rate")
     parser.add_argument("--num_workers", type=int, default=0, help="Number of worker processes for data loading")
     parser.add_argument("--debug", action="store_true", help="Run in debug mode with minimal samples")
+    
+    parser.add_argument("--max_chunks", type=int, default=20, help="Maximum number of chunk files to load to prevent memory overload")
     
     args = parser.parse_args()
     train_trm_pipeline(args)
