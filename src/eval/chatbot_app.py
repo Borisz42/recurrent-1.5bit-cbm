@@ -124,7 +124,7 @@ class SteeredChatbot:
     def generate_and_reason(self, prompt):
         # Format instruction template
         formatted_prompt = f"Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{prompt}\n\n### Response:\n"
-        inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.device)
+        inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.model.device)
         
         # 1. Run forward pass with hooks to capture activations on the prompt
         self.extractor.clear()
