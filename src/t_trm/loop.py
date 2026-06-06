@@ -192,7 +192,7 @@ class TTRMLoop(nn.Module):
         new_z = self.dtlgn_layers[-1](curr, hard=hard)
         return new_z
 
-    def forward(self, x, cmr_model, T_loops=3, n_steps=2, hard=False):
+    def forward(self, x, cmr_model, T_loops=3, n_steps=2, hard=False, intervention_mask=None, intervention_values=None):
         # Ensure model parameters are on the same device as input x
         if self.proj_x[0].weight.device != x.device:
             self.to(device=x.device)
@@ -229,6 +229,12 @@ class TTRMLoop(nn.Module):
                 
             # Map z to [0, 1] for CMR
             c_pred = self.proj_cmr_concepts(z)
+            
+            # Apply concept intervention/steering if provided
+            if intervention_mask is not None and intervention_values is not None:
+                mask = intervention_mask.to(device=device, dtype=model_dtype)
+                vals = intervention_values.to(device=device, dtype=model_dtype)
+                c_pred = c_pred * (1.0 - mask) + vals * mask
             
             # Retrieve CMR rule polarities & selections
             r = cmr_model.get_all_rule_vars()
