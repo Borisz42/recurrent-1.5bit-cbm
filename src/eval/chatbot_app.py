@@ -172,8 +172,7 @@ def launch_gradio(chatbot_engine):
         chat_fn,
         title="Recurrent 1.5-Bit Concept Bottleneck Chatbot",
         description="Interact with System 1 (Causal LLM) steered and monitored by System 2 (T-TRM + CMR).",
-        theme="soft"
-    ).launch()
+    ).launch(theme="soft")
 
 def launch_cli(chatbot_engine):
     print("\n==================================================")

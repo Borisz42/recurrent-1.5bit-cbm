@@ -7,6 +7,7 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 scratch_cache/
+unsloth_compiled_cache/
 
 # Custom Cache / Output Directories
 cached_activations/
