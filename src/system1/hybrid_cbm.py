@@ -54,6 +54,9 @@ class HybridCBM(nn.Module):
         """Initializes projection and reconstruction layers."""
         self.emb_dim = emb_dim
         
+        # Stable LayerNorm to prevent scale issues with large activations
+        self.input_norm = nn.LayerNorm(emb_dim)
+        
         # Project base activation x to CLIP space to compute static concept activations
         self.proj_clip = nn.Linear(emb_dim, self.clip_dim, bias=False)
         
@@ -96,8 +99,11 @@ class HybridCBM(nn.Module):
         if x.dtype != model_dtype:
             x = x.to(dtype=model_dtype)
 
-        # 1. Project activations x to CLIP space and compute static concepts
-        x_clip = self.proj_clip(x)  # (..., clip_dim)
+        # Normalize the inputs using LayerNorm to prevent overflow/saturation
+        x_norm = self.input_norm(x)
+
+        # 1. Project activations x_norm to CLIP space and compute static concepts
+        x_clip = self.proj_clip(x_norm)  # (..., clip_dim)
         
         # Compute cosine similarity with the concept embeddings
         # static_embeddings: (n_static, clip_dim)
@@ -109,7 +115,7 @@ class HybridCBM(nn.Module):
         z_static = torch.matmul(x_clip_normalized, static_embeds_normalized.T)
         
         # 2. Compute dynamic concepts
-        z_dynamic = torch.tanh(self.proj_dynamic(x))  # (..., n_dynamic)
+        z_dynamic = torch.tanh(self.proj_dynamic(x_norm))  # (..., n_dynamic)
         
         # 3. Combine to form the full concept bottleneck
         z = torch.cat([z_static, z_dynamic], dim=-1)  # (..., n_static + n_dynamic)
@@ -117,8 +123,8 @@ class HybridCBM(nn.Module):
         # 4. Reconstruct original activations for representation decomposition loss
         x_rec = self.decoder(z)  # (..., emb_dim)
         
-        # 5. Compute MSE reconstruction loss
-        rec_loss = F.mse_loss(x, x_rec)
+        # 5. Compute MSE reconstruction loss against the normalized input
+        rec_loss = F.mse_loss(x_norm, x_rec)
         
         # Cast outputs back to original input dtype if needed
         if orig_dtype != model_dtype:
