@@ -76,8 +76,8 @@ class HybridCBM(nn.Module):
         
         Args:
             x (torch.Tensor): Model activations of shape (batch_size, sequence_length, emb_dim) 
-                              or (batch_size, emb_dim).
-                              
+                               or (batch_size, emb_dim).
+                               
         Returns:
             z (torch.Tensor): Hybrid concept bottleneck values of shape (..., n_static + n_dynamic).
             x_rec (torch.Tensor): Reconstructed activation tensor of shape (..., emb_dim).
@@ -89,9 +89,17 @@ class HybridCBM(nn.Module):
             print(f"Dynamically inferring input activation dimension: {input_dim}")
             self._init_layers(input_dim)
             # Make sure we move the lazily created modules to the appropriate device
-            self.proj_clip = self.proj_clip.to(x.device)
-            self.proj_dynamic = self.proj_dynamic.to(x.device)
-            self.decoder = self.decoder.to(x.device)
+            self.to(device=x.device)
+
+        # Ensure correct device of parameters
+        if self.proj_clip.weight.device != x.device:
+            self.to(device=x.device)
+
+        # Handle dtype mismatch by casting input x to match the model's parameters' dtype
+        orig_dtype = x.dtype
+        model_dtype = self.proj_clip.weight.dtype
+        if x.dtype != model_dtype:
+            x = x.to(dtype=model_dtype)
 
         # 1. Project activations x to CLIP space and compute static concepts
         x_clip = self.proj_clip(x)  # (..., clip_dim)
@@ -100,7 +108,7 @@ class HybridCBM(nn.Module):
         # static_embeddings: (n_static, clip_dim)
         x_clip_normalized = F.normalize(x_clip, p=2, dim=-1)
         # static_embeddings is already normalized, but let's double check
-        static_embeds_normalized = F.normalize(self.static_embeddings, p=2, dim=-1)
+        static_embeds_normalized = F.normalize(self.static_embeddings.to(device=x.device, dtype=x.dtype), p=2, dim=-1)
         
         # z_static: (..., n_static)
         z_static = torch.matmul(x_clip_normalized, static_embeds_normalized.T)
@@ -117,6 +125,11 @@ class HybridCBM(nn.Module):
         # 5. Compute MSE reconstruction loss
         rec_loss = F.mse_loss(x, x_rec)
         
+        # Cast outputs back to original input dtype if needed
+        if orig_dtype != model_dtype:
+            z = z.to(dtype=orig_dtype)
+            x_rec = x_rec.to(dtype=orig_dtype)
+            
         return z, x_rec, rec_loss
 
     def compute_clip_embeddings(self, tokenizer=None, text_model=None):
@@ -158,7 +171,7 @@ class HybridCBM(nn.Module):
             similarities (torch.Tensor): Cosine similarity scores for the chosen labels, shape (n_dynamic,).
         """
         device = self.decoder.weight.device
-        candidate_embeddings = candidate_embeddings.to(device)
+        candidate_embeddings = candidate_embeddings.to(device=device, dtype=self.decoder.weight.dtype)
         
         # Extract dynamic concept vectors from the decoder weight matrix
         # self.decoder.weight shape is (emb_dim, n_static + n_dynamic)
