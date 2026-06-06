@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caching directories
+.pytest_cache/
+.ipynb_checkpoints/
+scratch_cache/
+
+# Custom Cache / Output Directories
+cached_activations/
+outputs/
+adapters/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+.env
+
+# System files
+.DS_Store
+Thumbs.db

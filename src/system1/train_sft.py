@@ -1,4 +1,6 @@
 import os
+# Force single-GPU visibility to prevent bitsandbytes illegal memory access crashes on dual-GPU systems
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import argparse
 import torch
 
