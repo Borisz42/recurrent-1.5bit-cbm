@@ -1,10 +1,14 @@
 import os
+import sys
 import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 from safetensors.torch import load_file
+
+# Add repository root to python path to resolve src imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from src.system1.hybrid_cbm import HybridCBM
 from src.cmr.model import CMR, InputTypes
