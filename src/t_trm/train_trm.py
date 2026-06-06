@@ -61,15 +61,21 @@ def train_trm_pipeline(args):
     else:
         print("Warning: No pre-trained HybridCBM checkpoint found or specified. Running with initialized weights.")
         
-    # Project activations to obtain target concepts
+    # Project activations to obtain target concepts in mini-batches to prevent CUDA OOM
     hybrid_cbm.eval()
+    c_probs_list = []
+    batch_size = 4096
+    
     with torch.no_grad():
-        activations_dev = activations.to(device)
-        # activations_dev can be float16, forward will return float16/float32 accordingly
-        z, _, _ = hybrid_cbm(activations_dev)
-        # Map z from [-1, 1] to concept probability targets in [0, 1]
-        c_probs = (z + 1.0) / 2.0
-        c_probs = c_probs.float().cpu() # keep on CPU for dataloader
+        model_dtype = hybrid_cbm.proj_clip.weight.dtype
+        for i in range(0, activations.shape[0], batch_size):
+            batch_x = activations[i:i+batch_size].to(device=device, dtype=model_dtype)
+            z, _, _ = hybrid_cbm(batch_x)
+            # Map z from [-1, 1] to concept probability targets in [0, 1]
+            c_probs_batch = (z + 1.0) / 2.0
+            c_probs_list.append(c_probs_batch.float().cpu())
+            
+        c_probs = torch.cat(c_probs_list, dim=0)
         
     n_concepts = c_probs.shape[-1]
     print(f"Computed target concepts shape: {c_probs.shape} (Static + Dynamic: {n_concepts})")
