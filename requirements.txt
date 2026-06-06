@@ -1,0 +1,27 @@
+# Core PyTorch for Tesla T4 / Kaggle environment compatibility
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.1.1+cu121
+torchvision==0.16.1+cu121
+torchaudio==2.1.1+cu121
+
+# PyTorch Lightning & CMR dependencies
+lightning==2.1.2
+pytorch-lightning==2.1.2
+torchmetrics==1.2.1
+
+# Unsloth & fine-tuning dependencies
+transformers==4.36.2
+accelerate==0.25.0
+safetensors
+datasets
+
+# Standard machine learning packages
+scikit-learn
+xgboost
+pandas
+numpy
+
+# Note: For Unsloth installation, it is recommended to run:
+# pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
+# or follow the specific installation guide for the target environment.
+unsloth
