@@ -161,7 +161,7 @@ class SteeredChatbot:
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=args.max_tokens,
+                max_new_tokens=self.args.max_tokens,
                 temperature=0.7,
                 do_sample=True
             )
