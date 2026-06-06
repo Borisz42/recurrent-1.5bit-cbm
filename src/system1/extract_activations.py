@@ -67,10 +67,12 @@ def extract(args):
         else:
             quantization_config = None
 
+        # Force single-GPU mapping (cuda:0) to prevent multi-GPU split errors on T4 x2
+        device_map = {"": 0} if torch.cuda.is_available() else None
         model = AutoModelForCausalLM.from_pretrained(
             args.model_name,
             quantization_config=quantization_config,
-            device_map="auto" if torch.cuda.is_available() else None,
+            device_map=device_map,
             torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
         )
             
