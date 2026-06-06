@@ -193,14 +193,32 @@ class TTRMLoop(nn.Module):
         return new_z
 
     def forward(self, x, cmr_model, T_loops=3, n_steps=2, hard=False):
+        # Ensure model parameters are on the same device as input x
+        if self.proj_x[0].weight.device != x.device:
+            self.to(device=x.device)
+            
+        # Ensure cmr_model parameters are on the same device and dtype as this model
+        model_dtype = self.proj_x[0].weight.dtype
+        cmr_params = list(cmr_model.parameters())
+        if len(cmr_params) > 0:
+            cmr_device = cmr_params[0].device
+            cmr_dtype = cmr_params[0].dtype
+            if cmr_device != x.device or cmr_dtype != model_dtype:
+                cmr_model.to(device=x.device, dtype=model_dtype)
+                
+        # Handle dtype mismatch by casting input x to match the model's parameters' dtype
+        orig_dtype = x.dtype
+        if x.dtype != model_dtype:
+            x = x.to(dtype=model_dtype)
+            
         batch_size = x.size(0)
         device = x.device
         
         z_x = self.proj_x(x)
         
-        # Initialize T-TRM states
-        z = torch.zeros(batch_size, self.n_latent, device=device) # Kleene unknown
-        y = torch.zeros(batch_size, self.d_model, device=device)
+        # Initialize T-TRM states using the correct dtype and device
+        z = torch.zeros(batch_size, self.n_latent, dtype=model_dtype, device=device) # Kleene unknown
+        y = torch.zeros(batch_size, self.d_model, dtype=model_dtype, device=device)
         
         for t in range(T_loops):
             z_y = self.proj_y(y)
@@ -221,8 +239,10 @@ class TTRMLoop(nn.Module):
             if cmr_model.selector_input == InputTypes.concepts:
                 sel_in = c_pred
             else:
+                # Create zeros with matching dtype
+                zeros_emb = torch.zeros(batch_size, cmr_model.embedding_size, dtype=model_dtype, device=device)
                 c_embs, _ = cmr_model.concept_embedder(
-                    torch.zeros(batch_size, cmr_model.embedding_size, device=device), 
+                    zeros_emb, 
                     c=c_pred, 
                     train=False
                 )
@@ -242,7 +262,14 @@ class TTRMLoop(nn.Module):
             # Generate refined continuous steering vector
             y = self.proj_steering(y_pred)
             
-        return y, z, c_pred
+        # Cast outputs back to original input dtype if needed
+        if orig_dtype != model_dtype:
+            y = y.to(dtype=orig_dtype)
+            z = z.to(dtype=orig_dtype)
+            c_pred = c_pred.to(dtype=orig_dtype)
+            y_pred = y_pred.to(dtype=orig_dtype)
+            
+        return y, z, c_pred, y_pred
 
     def compute_losses(self):
         losses = [layer.compute_losses() for layer in self.dtlgn_layers]
