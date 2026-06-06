@@ -29,9 +29,8 @@ from datasets import load_dataset
 from tqdm import tqdm
 from safetensors.torch import save_file
 from src.system1.hook_extractor import ActivationHookExtractor
-if not HAS_UNSLOTH:
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import PeftModel
 
 def find_layers_path(model):
     """

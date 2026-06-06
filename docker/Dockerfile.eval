@@ -1,0 +1,17 @@
+FROM python:3.10-slim
+
+# Install git for cloning the human-eval library
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install human-eval directly from the official repository
+RUN pip install --no-cache-dir git+https://github.com/openai/human-eval.git
+
+# Set environment variable to enable code execution safely within the container
+ENV ALLOW_CODE_EXECUTION=1
+
+WORKDIR /app
+
+# Entrypoint runs the evaluation command
+ENTRYPOINT ["python", "-m", "human_eval.evaluate_functional_correctness"]

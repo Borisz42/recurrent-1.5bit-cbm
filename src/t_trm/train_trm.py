@@ -56,9 +56,17 @@ def train_trm_pipeline(args):
     # 2. Get target concepts via HybridCBM
     emb_dim = activations.shape[-1]
     
+    # Import relevant concept list
+    if getattr(args, "concepts_type", "general") == "coder":
+        from src.system1.hybrid_cbm import CODER_CONCEPTS
+        concepts = CODER_CONCEPTS
+    else:
+        from src.system1.hybrid_cbm import DEFAULT_CONCEPTS
+        concepts = DEFAULT_CONCEPTS
+        
     # Instantiate HybridCBM to compute concept targets
     # If a checkpoint is provided, load it. Otherwise, use random projections.
-    hybrid_cbm = HybridCBM(n_dynamic=args.n_dynamic, clip_dim=args.clip_dim, emb_dim=emb_dim).to(device)
+    hybrid_cbm = HybridCBM(n_dynamic=args.n_dynamic, clip_dim=args.clip_dim, emb_dim=emb_dim, concepts=concepts).to(device)
     if args.hybrid_cbm_path and os.path.exists(args.hybrid_cbm_path):
         print(f"Loading trained HybridCBM weights from {args.hybrid_cbm_path}")
         hybrid_cbm.load_state_dict(torch.load(args.hybrid_cbm_path, map_location=device))
@@ -264,8 +272,8 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=0.01, help="Learning rate")
     parser.add_argument("--num_workers", type=int, default=0, help="Number of worker processes for data loading")
     parser.add_argument("--debug", action="store_true", help="Run in debug mode with minimal samples")
-    
     parser.add_argument("--max_chunks", type=int, default=20, help="Maximum number of chunk files to load to prevent memory overload")
+    parser.add_argument("--concepts_type", type=str, choices=["general", "coder"], default="general", help="Type of static concepts to use")
     
     args = parser.parse_args()
     train_trm_pipeline(args)

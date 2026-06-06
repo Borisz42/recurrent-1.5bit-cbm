@@ -14,6 +14,19 @@ DEFAULT_CONCEPTS = [
     "linguistic classification"
 ]
 
+CODER_CONCEPTS = [
+    "syntax validation",
+    "variable scoping",
+    "control flow",
+    "data structures",
+    "algorithmic efficiency",
+    "exception handling",
+    "modular function design",
+    "string formatting",
+    "mathematical computation",
+    "file and resource io"
+]
+
 class HybridCBM(nn.Module):
     def __init__(self, n_dynamic=10, emb_dim=None, clip_dim=512, concepts=None, clip_embeddings=None):
         """
