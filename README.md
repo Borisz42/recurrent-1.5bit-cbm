@@ -98,7 +98,8 @@ $$z_{CMR} = \frac{z_{T-TRM} + 1}{2}$$
 │   │   ├── hook_extractor.py     # Detached activation forward hooks
 │   │   ├── hybrid_cbm.py         # Hybrid CBM with Tanh bounding & CLIP translation
 │   │   ├── train_sft.py          # Supervised Fine-Tuning CLI script
-│   │   └── extract_activations.py # Chunked activation extraction script
+│   │   ├── extract_activations.py # Chunked activation extraction script
+│   │   └── conceptnet_harvester.py # ConceptNet relation scraper & domain classifier
 │   ├── t_trm/
 │   │   ├── __init__.py
 │   │   ├── loop.py               # DTLGN Gate, Neuron, Layer, and T-TRM loop
@@ -151,6 +152,12 @@ python src/system1/extract_activations.py \
 ```
 
 ### Stage 3: Incremental Concept Translation
+To generate the candidate concept bank for CLIP alignment, you can use the automated ConceptNet harvester script to gather clean domain-relevant concepts grouped by domain:
+```bash
+python src/system1/conceptnet_harvester.py --limit_per_seed 50
+```
+This queries the ConceptNet API (with automatic fallback to a local 55-concept taxonomy if the API is offline) and prints a copy-pasteable Python list.
+
 Train the `HybridCBM` model (with `tanh` bounding to avoid representation leakage) on cached activations. Post-training, project the learnable dynamic concept vectors into the Candidate Concept Bank via CLIP space cosine similarity:
 ```python
 from safetensors.torch import load_file
