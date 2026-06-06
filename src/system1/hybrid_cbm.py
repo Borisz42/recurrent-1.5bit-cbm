@@ -24,7 +24,27 @@ CODER_CONCEPTS = [
     "modular function design",
     "string formatting",
     "mathematical computation",
-    "file and resource io"
+    "file and resource io",
+    "regular expression",
+    "recursive algorithm",
+    "sorting and searching",
+    "memory allocation",
+    "object oriented",
+    "type verification",
+    "input validation",
+    "database querying",
+    "concurrency thread",
+    "pointer reference",
+    "network communication",
+    "boolean logic",
+    "bitwise operation",
+    "compiler parsing",
+    "version control",
+    "unit testing",
+    "debugging logic",
+    "api endpoint",
+    "data serialization",
+    "inheritance class"
 ]
 
 class HybridCBM(nn.Module):
