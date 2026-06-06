@@ -176,7 +176,34 @@ Instantiate the `TTRMLoop` to coordinate DTLGN latent steps and CMR rule updates
 
 ---
 
-## 🛠️ Installation & Tests
+## 🤖 Using the Model (Chatbot Inference)
+
+Once training is complete, the architecture operates as a highly interpretable, steered chatbot. The inference pipeline works as follows:
+
+1. **Base Generation (System 1):** The user prompt is passed into the fine-tuned `DeepSeek-R1` or `Qwen` causal language model.
+2. **Activation Hooking:** A forward hook automatically intercepts the hidden state at Layer 14.
+3. **Recursive Steering (System 2):** The Layer 14 continuous activation is sent to the decoupled `T-TRM` loop. The state is projected into the `HybridCBM` bottleneck to identify relevant concepts (e.g., `logical deduction`).
+4. **Transparent Rules:** The `CMR` reads these concepts and applies explicit, printed boolean logic rules to determine the downstream trajectory.
+5. **Final Output:** The system outputs the generated response *alongside* the explicit concept bottleneck vector and the exact logic rule it used to shape the answer, providing total transparency to the user.
+
+---
+
+## 🧪 Running the Evaluation Suite
+
+To empirically validate the faithfulness and stability of the trained model, we provide a dedicated testing script that operates on the cached evaluation data:
+
+```bash
+python src/eval/run_tests.py --cache_dir "./cached_activations" --model_dir "./t_trm_outputs"
+```
+
+The evaluation suite performs three major checks:
+1. **Faithfulness & CUE Metric:** Trains a standard neural network (`BlackBoxBaseline`) directly on Layer 14 activations and compares its accuracy against our Concept Bottleneck. A CUE score > 0.90 proves the bottleneck is fully utilized and not leaking statistical variance.
+2. **Adversarial Steering:** Verifies the temporal stability of the T-TRM loop by injecting Gaussian noise into activations and testing predicate dropout (masking active concepts). This ensures the model degrades gracefully (abstains) rather than confidently hallucinating.
+3. **Rule Extraction:** Physically extracts and prints the highest confidence logic rules learned by the CMR module, proving that the decision-making process is human-auditable.
+
+---
+
+## 🛠️ Installation & Setup
 
 ### Installation
 1. Clone the repository and install the standard dependencies:
