@@ -106,7 +106,7 @@ class HybridCBM(nn.Module):
         z_static = torch.matmul(x_clip_normalized, static_embeds_normalized.T)
         
         # 2. Compute dynamic concepts
-        z_dynamic = self.proj_dynamic(x)  # (..., n_dynamic)
+        z_dynamic = torch.tanh(self.proj_dynamic(x))  # (..., n_dynamic)
         
         # 3. Combine to form the full concept bottleneck
         z = torch.cat([z_static, z_dynamic], dim=-1)  # (..., n_static + n_dynamic)
@@ -142,3 +142,43 @@ class HybridCBM(nn.Module):
             embeddings = F.normalize(embeddings, p=2, dim=1)
             self.static_embeddings.copy_(embeddings.to(self.static_embeddings.device))
         print("Updated static concept embeddings using the provided text model.")
+
+    def translate_dynamic_concepts(self, candidate_embeddings, candidate_labels):
+        """
+        Translates learned dynamic concept vectors back into human-understandable labels by projecting
+        them to the CLIP space and finding the closest candidate text concept via cosine similarity.
+        
+        Args:
+            candidate_embeddings (torch.Tensor): Precomputed CLIP embeddings of candidate concepts,
+                                                 shape (n_candidates, clip_dim).
+            candidate_labels (list of str): Human-understandable names for the candidate concepts.
+            
+        Returns:
+            translated_labels (list of str): Assigned labels for each dynamic concept.
+            similarities (torch.Tensor): Cosine similarity scores for the chosen labels, shape (n_dynamic,).
+        """
+        device = self.decoder.weight.device
+        candidate_embeddings = candidate_embeddings.to(device)
+        
+        # Extract dynamic concept vectors from the decoder weight matrix
+        # self.decoder.weight shape is (emb_dim, n_static + n_dynamic)
+        # Column j represents concept j
+        dynamic_vectors = self.decoder.weight[:, self.n_static:].T  # (n_dynamic, emb_dim)
+        
+        # Project dynamic concept vectors to CLIP space
+        projected_clip = self.proj_clip(dynamic_vectors)  # (n_dynamic, clip_dim)
+        
+        # Normalize vectors for cosine similarity
+        projected_clip_norm = F.normalize(projected_clip, p=2, dim=-1)
+        candidate_embeds_norm = F.normalize(candidate_embeddings, p=2, dim=-1)
+        
+        # Compute cosine similarity
+        # sim_matrix: (n_dynamic, n_candidates)
+        sim_matrix = torch.matmul(projected_clip_norm, candidate_embeds_norm.T)
+        
+        # Find closest match for each dynamic concept
+        max_sims, max_indices = torch.max(sim_matrix, dim=-1)
+        
+        translated_labels = [candidate_labels[idx.item()] for idx in max_indices]
+        return translated_labels, max_sims
+
