@@ -132,6 +132,12 @@ def extract(args):
             # Run forward pass (hook captures target layer outputs)
             _ = model(**inputs)
             
+            # Pop raw activations and filter out padding tokens to prevent sequence length mismatches
+            batch_activations = extractor.extracted_activations.pop()
+            mask = inputs["attention_mask"].cpu()
+            real_activations = batch_activations[mask.bool()] # shape (N_real_tokens, d_model)
+            extractor.extracted_activations.append(real_activations)
+            
             chunk_samples += len(batch_slice)
             
             # Save chunk and flush RAM if capacity reached
