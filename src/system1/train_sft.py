@@ -104,43 +104,64 @@ def train(args):
 
     print("Starting SFTTrainer setup...")
     
+    import inspect
+    from trl import SFTTrainer
+    
     # Check for SFTConfig compatibility (required in trl >= 0.10.0)
     try:
         from trl import SFTConfig
         HAS_SFT_CONFIG = True
+        config_params = inspect.signature(SFTConfig.__init__).parameters
     except ImportError:
         HAS_SFT_CONFIG = False
+        config_params = {}
 
-    # Choose processing_class / tokenizer keyword argument based on trl version
-    import inspect
-    sig = inspect.signature(SFTTrainer.__init__)
-    if "processing_class" in sig.parameters:
-        trainer_kwargs = {"processing_class": tokenizer}
-    else:
-        trainer_kwargs = {"tokenizer": tokenizer}
+    # Inspect SFTTrainer parameters
+    trainer_params = inspect.signature(SFTTrainer.__init__).parameters
+
+    # Choose processing_class / tokenizer keyword argument
+    trainer_kwargs = {}
+    if "processing_class" in trainer_params:
+        trainer_kwargs["processing_class"] = tokenizer
+    elif "tokenizer" in trainer_params:
+        trainer_kwargs["tokenizer"] = tokenizer
+
+    # Define standard training arguments
+    config_kwargs = {
+        "per_device_train_batch_size": args.batch_size,
+        "gradient_accumulation_steps": args.gradient_accumulation_steps,
+        "warmup_steps": 5,
+        "max_steps": args.max_steps if args.debug else -1,
+        "num_train_epochs": args.epochs if not args.debug else 1,
+        "learning_rate": args.lr,
+        "fp16": not torch.cuda.is_bf16_supported() and torch.cuda.is_available(),
+        "bf16": torch.cuda.is_bf16_supported(),
+        "logging_steps": 1,
+        "optim": "adamw_8bit" if torch.cuda.is_available() else "adamw_torch",
+        "weight_decay": 0.01,
+        "lr_scheduler_type": "linear",
+        "seed": 3407,
+        "output_dir": args.output_dir,
+    }
+
+    # Define dataset specific trainer args
+    dataset_args = {
+        "max_seq_length": args.max_seq_length,
+        "dataset_text_field": "text",
+        "packing": False,
+        "dataset_num_proc": 1
+    }
 
     if HAS_SFT_CONFIG:
-        # SFTConfig inherits from TrainingArguments and expects dataset arguments here
-        training_args = SFTConfig(
-            per_device_train_batch_size = args.batch_size,
-            gradient_accumulation_steps = args.gradient_accumulation_steps,
-            warmup_steps = 5,
-            max_steps = args.max_steps if args.debug else -1,
-            num_train_epochs = args.epochs if not args.debug else 1,
-            learning_rate = args.lr,
-            fp16 = not torch.cuda.is_bf16_supported() and torch.cuda.is_available(),
-            bf16 = torch.cuda.is_bf16_supported(),
-            logging_steps = 1,
-            optim = "adamw_8bit" if torch.cuda.is_available() else "adamw_torch",
-            weight_decay = 0.01,
-            lr_scheduler_type = "linear",
-            seed = 3407,
-            output_dir = args.output_dir,
-            max_seq_length = args.max_seq_length,
-            dataset_text_field = "text",
-            packing = False,
-            dataset_num_proc = 1
-        )
+        # Dynamically route dataset_args to SFTConfig if it accepts them,
+        # otherwise route them to SFTTrainer
+        for k, v in dataset_args.items():
+            if k in config_params:
+                config_kwargs[k] = v
+            elif k in trainer_params:
+                trainer_kwargs[k] = v
+        
+        training_args = SFTConfig(**config_kwargs)
         trainer = SFTTrainer(
             model = model,
             train_dataset = formatted_dataset,
@@ -148,31 +169,16 @@ def train(args):
             **trainer_kwargs
         )
     else:
-        # Fallback for older trl versions where max_seq_length/dataset_text_field are SFTTrainer args
+        # Route dataset_args directly to SFTTrainer
+        for k, v in dataset_args.items():
+            if k in trainer_params:
+                trainer_kwargs[k] = v
+                
         from transformers import TrainingArguments
-        training_args = TrainingArguments(
-            per_device_train_batch_size = args.batch_size,
-            gradient_accumulation_steps = args.gradient_accumulation_steps,
-            warmup_steps = 5,
-            max_steps = args.max_steps if args.debug else -1,
-            num_train_epochs = args.epochs if not args.debug else 1,
-            learning_rate = args.lr,
-            fp16 = not torch.cuda.is_bf16_supported() and torch.cuda.is_available(),
-            bf16 = torch.cuda.is_bf16_supported(),
-            logging_steps = 1,
-            optim = "adamw_8bit" if torch.cuda.is_available() else "adamw_torch",
-            weight_decay = 0.01,
-            lr_scheduler_type = "linear",
-            seed = 3407,
-            output_dir = args.output_dir,
-        )
+        training_args = TrainingArguments(**config_kwargs)
         trainer = SFTTrainer(
             model = model,
             train_dataset = formatted_dataset,
-            dataset_text_field = "text",
-            max_seq_length = args.max_seq_length,
-            dataset_num_proc = 1,
-            packing = False,
             args = training_args,
             **trainer_kwargs
         )
