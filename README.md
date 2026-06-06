@@ -176,15 +176,47 @@ Instantiate the `TTRMLoop` to coordinate DTLGN latent steps and CMR rule updates
 
 ---
 
-## 🤖 Using the Model (Chatbot Inference)
+## 🤖 Using the Model (Local Chatbot Inference)
 
-Once training is complete, the architecture operates as a highly interpretable, steered chatbot. The inference pipeline works as follows:
+Once training on Kaggle is complete, you can run the full steered chatbot locally on your RTX 3070 (which has 8GB VRAM—more than enough for this 1.5B parameters pipeline).
 
-1. **Base Generation (System 1):** The user prompt is passed into the fine-tuned `DeepSeek-R1` or `Qwen` causal language model.
-2. **Activation Hooking:** A forward hook automatically intercepts the hidden state at Layer 14.
-3. **Recursive Steering (System 2):** The Layer 14 continuous activation is sent to the decoupled `T-TRM` loop. The state is projected into the `HybridCBM` bottleneck to identify relevant concepts (e.g., `logical deduction`).
-4. **Transparent Rules:** The `CMR` reads these concepts and applies explicit, printed boolean logic rules to determine the downstream trajectory.
-5. **Final Output:** The system outputs the generated response *alongside* the explicit concept bottleneck vector and the exact logic rule it used to shape the answer, providing total transparency to the user.
+### 1. What to Export/Download from Kaggle
+From your completed Kaggle workspace, download the following model checkpoint files:
+*   **System 1 Adapters:** The `./adapters` directory (which contains `adapter_model.safetensors` and `adapter_config.json`).
+*   **System 2 Checkpoints:** `./t_trm_outputs/t_trm_loop.pt` and `./t_trm_outputs/cmr_model.pt`.
+*   **HybridCBM weights:** `./hybrid_cbm.pt`.
+
+Place these in your local repository root folder.
+
+### 2. Can I use this in LM Studio?
+**No, not for the steered neuro-symbolic behavior.** 
+*   **Why:** LM Studio executes standard GGUF models via `llama.cpp`. However, our framework relies on **System 2 steering** which requires executing a Python runtime to hook Layer 14 activations mid-generation, passing them through custom PyTorch tensor operations (`T-TRM` and `CMR`), and injecting a steering vector back. 
+*   **Alternative:** You *can* merge your trained System 1 LoRA adapters into the base model, convert it to GGUF, and run it in LM Studio. However, this will only run the unsteered base model; it will lose the real-time safety, logical rules, and interpretability guarantees provided by System 2.
+*   **To run the full steered chatbot:** Use the provided chatbot script `src/eval/chatbot_app.py` which will launch an interactive Gradio Web UI (with a live Neuro-Symbolic Debugger Panel showing active concepts and logic rules) or fall back to a terminal-based CLI.
+
+    Run the script locally:
+    ```bash
+    # Run the interactive Gradio Web UI (default)
+    python src/eval/chatbot_app.py --model_name "unsloth/DeepSeek-R1-Distill-Qwen-1.5B-unsloth-bnb-4bit" --adapter_dir "./adapters"
+
+    # Or run in terminal-only CLI mode
+    python src/eval/chatbot_app.py --cli
+    ```
+
+### 3. How to Publish the Model
+To publish the model so others can use it:
+1.  **Merge the LoRA Adapters:** Merge the System 1 adapters back into the base model to create a single standalone model:
+    ```python
+    # Run locally or on Kaggle
+    from unsloth import FastLanguageModel
+    model, tokenizer = FastLanguageModel.from_pretrained("./adapters", load_in_4bit=False)
+    model.save_pretrained_merged("your-hf-username/steered-system1-1.5b", tokenizer, save_method="merged_16bit")
+    model.push_to_hub_merged("your-hf-username/steered-system1-1.5b", tokenizer, save_method="merged_16bit", token="YOUR_HF_TOKEN")
+    ```
+2.  **Publish System 2 Weights:** Upload `t_trm_loop.pt`, `cmr_model.pt`, and `hybrid_cbm.pt` to either:
+    *   The "Files" tab of your Hugging Face model repository.
+    *   A GitHub Release asset on your repository.
+3.  **Provide the Wrapper:** Provide the code in `src/` so others can clone the repository, download your weights, and execute the steering loop.
 
 ---
 

@@ -16,11 +16,13 @@ accelerate==0.25.0
 safetensors
 datasets
 
-# Standard machine learning packages
+# Standard machine learning and evaluation packages
 scikit-learn
 xgboost
 pandas
 numpy
+peft
+gradio
 
 # Note: For Unsloth installation, it is recommended to run:
 # pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
