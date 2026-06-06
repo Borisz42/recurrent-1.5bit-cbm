@@ -34,6 +34,10 @@ def run_tests(args):
     if len(chunk_files) == 0:
         raise FileNotFoundError(f"No cached activation chunk files found in '{args.cache_dir}'.")
         
+    if args.max_chunks > 0:
+        print(f"Limiting evaluation to the first {args.max_chunks} chunk files to prevent memory overload.")
+        chunk_files = chunk_files[:args.max_chunks]
+        
     activations_list = []
     for f in chunk_files:
         chunk_data = load_file(f)
@@ -42,16 +46,22 @@ def run_tests(args):
     
     emb_dim = activations.shape[-1]
     
-    # Generate labels via HybridCBM (mimicking train_trm.py)
+    # Generate labels via HybridCBM
     hybrid_cbm = HybridCBM(n_dynamic=args.n_dynamic, clip_dim=args.clip_dim, emb_dim=emb_dim).to(device)
     if args.hybrid_cbm_path and os.path.exists(args.hybrid_cbm_path):
         hybrid_cbm.load_state_dict(torch.load(args.hybrid_cbm_path, map_location=device))
         
     hybrid_cbm.eval()
+    c_probs_list = []
+    batch_size_inf = 4096
     with torch.no_grad():
-        z, _, _ = hybrid_cbm(activations.to(device))
-        c_probs = (z + 1.0) / 2.0
-        c_probs = c_probs.float().cpu()
+        model_dtype = hybrid_cbm.proj_clip.weight.dtype
+        for i in range(0, activations.shape[0], batch_size_inf):
+            batch_x = activations[i:i+batch_size_inf].to(device=device, dtype=model_dtype)
+            z, _, _ = hybrid_cbm(batch_x)
+            c_probs_batch = (z + 1.0) / 2.0
+            c_probs_list.append(c_probs_batch.float().cpu())
+        c_probs = torch.cat(c_probs_list, dim=0)
         
     y_task1 = (c_probs[:, 0] > 0.5).float().unsqueeze(1)
     y_task2 = (c_probs[:, 1] > 0.5).float().unsqueeze(1)
@@ -196,6 +206,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_rules", type=int, default=10)
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--max_chunks", type=int, default=20)
     
     args = parser.parse_args()
     run_tests(args)
