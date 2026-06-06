@@ -3,16 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 DEFAULT_CONCEPTS = [
-    "spatial puzzle",
-    "logical deduction",
-    "conditional branching",
-    "arithmetic calculation",
-    "negation statement",
-    "loop iteration",
-    "variable assignment",
-    "recursive call",
-    "comparison check",
-    "return output"
+    "code generation",
+    "mathematical reasoning",
+    "information extraction",
+    "text summarization",
+    "creative narrative writing",
+    "linguistic translation",
+    "factual recall qa",
+    "roleplay persona simulation",
+    "linguistic classification"
 ]
 
 class HybridCBM(nn.Module):
