@@ -4,7 +4,7 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, BitsAndBytesConfig
 from peft import PeftModel
 
 # Add repository root to python path to resolve src imports
@@ -42,16 +42,31 @@ class SteeredChatbot:
             
         # Optimize loading based on available device
         if self.device == "cuda":
+            kwargs = {
+                "device_map": "auto",
+                "dtype": torch.float16,
+            }
+            if args.load_in_4bit:
+                try:
+                    config = AutoConfig.from_pretrained(args.model_name)
+                    has_quant = getattr(config, "quantization_config", None) is not None
+                except Exception:
+                    has_quant = False
+                
+                if not has_quant:
+                    kwargs["quantization_config"] = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_compute_dtype=torch.float16
+                    )
+            
             self.model = AutoModelForCausalLM.from_pretrained(
                 args.model_name,
-                device_map="auto",
-                torch_dtype=torch.float16,
-                load_in_4bit=args.load_in_4bit
+                **kwargs
             )
         else:
             self.model = AutoModelForCausalLM.from_pretrained(
                 args.model_name,
-                torch_dtype=torch.float32
+                dtype=torch.float32
             )
             
         if args.adapter_dir and os.path.exists(args.adapter_dir):
@@ -59,6 +74,8 @@ class SteeredChatbot:
             self.model = PeftModel.from_pretrained(self.model, args.adapter_dir)
             
         self.model.eval()
+        if hasattr(self.model, "generation_config"):
+            self.model.generation_config.max_length = None
         
         # Setup activation hook
         layers_path = find_layers_path(self.model)

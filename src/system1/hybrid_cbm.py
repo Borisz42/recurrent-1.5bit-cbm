@@ -3,16 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 DEFAULT_CONCEPTS = [
-    "spatial puzzle",
-    "logical deduction",
-    "conditional branching",
-    "arithmetic calculation",
-    "negation statement",
-    "loop iteration",
-    "variable assignment",
-    "recursive call",
-    "comparison check",
-    "return output"
+    "control flow loop conditional",
+    "arithmetic mathematical reasoning",
+    "boolean logic reasoning",
+    "variable state assignment",
+    "syntax structure function definition"
 ]
 
 class HybridCBM(nn.Module):
