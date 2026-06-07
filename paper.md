@@ -97,13 +97,13 @@ We evaluate downstream task accuracy under varying concept intervention rates $p
 **Test Design:** 
 
 1. **Rule Coverage:** Compute the Shannon entropy of the chosen rule index distribution across the dataset:
-   
-   $$ H(\text{Rules}) = -\sum_{i=1}^{R} P(r_i) \log_2 P(r_i) $$
-   
+
+$$ H(\text{Rules}) = -\sum_{i=1}^{R} P(r_i) \log_2 P(r_i) $$
+
 2. **Complexity:** Compute the average literal count (number of active/relevant concepts) per rule:
-   
-   $$ \text{Literal Count} = \frac{1}{R} \sum_{i=1}^{R} \sum_{j=1}^{C} \mathbb{I}(\text{irrelevance}_{i, j} < 0.5) $$
-   
+
+$$ \text{Literal Count} = \frac{1}{R} \sum_{i=1}^{R} \sum_{j=1}^{C} \mathbb{I}(\text{irrelevance}_{i, j} < 0.5) $$
+
 **Success Condition:** A balanced rule entropy indicates rules are broadly distributed, while a low literal count (e.g., $<3.0$ active concepts per rule) ensures the rules remain readable and human-interpretable.
 
 ## 4. Empirical Evaluation and Testing Results
@@ -115,18 +115,18 @@ The table below summarizes and compares the empirical results for each formal ev
 | Metric | Target / Success Condition | General Version | Coder Version | Status (General / Coder) |
 | :--- | :--- | :--- | :--- | :--- |
 | **Accuracy (BlackBox)** | Baseline benchmark | 100.00% | 99.66% | Reference / Reference |
-| **Accuracy (HybridCBM+CMR)** | $\geq$ BlackBox Accuracy | 100.00% | 82.93% ($T_1$: 75.53%, $T_2$: 90.33%) | **Passed** / Underperformed |
-| **CUE Score** | $> 0.90$ | **0.9978** ($H(c)=0.64$, $H(r)=293.1$) | **1.1973** ($H(c)=0.91$, $H(r)=249.2$) | **Passed** / **Passed (Artifactual)** |
-| **Noise Deviation** | $< 0.20$ | **0.0000** | **0.0000** (Mean, Max, Std) | **Passed** / **Passed** |
+| **Accuracy (HybridCBM+CMR)** | ≥ BlackBox Accuracy | 100.00% | 82.93% (T₁: 75.53%, T₂: 90.33%) | **Passed** / Underperformed |
+| **CUE Score** | > 0.90 | **0.9978** (H(c) = 0.64, H(r) = 293.1) | **1.1973** (H(c) = 0.91, H(r) = 249.2) | **Passed** / **Passed (Artifactual)** |
+| **Noise Deviation** | < 0.20 | **0.0000** | **0.0000** (Mean, Max, Std) | **Passed** / **Passed** |
 | **Dropout Mean Deviation** | Stable degradation | **0.0000** | **0.0000** (Mean, Max, Std) | **Passed** / **Passed** |
-| **Hardening Gap ($\Delta_{\text{hard}}$)** | $< 0.05$ | **0.0000** ($100\%$ soft/hard) | **0.0000** ($82.93\%$ soft/hard) | **Passed** / **Passed** |
-| **Average Concept ROC-AUC** | $\geq 0.85$ | 0.5000 | 0.5000 | Under-optimized / Under-optimized |
-| **Average Concept F1-Score** | $\geq 0.80$ | 0.2857 | **0.6545** (Static: $\sim$0.86, Dynamic: $\sim$0.31) | Under-optimized / Moderate |
+| **Hardening Gap (Δ_hard)** | < 0.05 | **0.0000** (100% soft/hard) | **0.0000** (82.93% soft/hard) | **Passed** / **Passed** |
+| **Average Concept ROC-AUC** | ≥ 0.85 | 0.5000 | 0.5000 | Under-optimized / Under-optimized |
+| **Average Concept F1-Score** | ≥ 0.80 | 0.2857 | **0.6545** (Static: ~0.86, Dynamic: ~0.31) | Under-optimized / Moderate |
 | **Intervention Steerability** | Monotonic accuracy scaling | 100.00% across all rates | 82.93% across all rates | **Passed** / Flat (Bypassed) |
 | **Rule Selection Entropy** | Balanced utilization | -0.0000 (Single-rule) | -0.0000 (Single-rule) | Verified / Verified |
-| **Average Literal Count** | Low complexity ($< 3.0$ preferred) | 14.00 | **0.00** (All 50 concepts irrelevant) | High Complexity / **Passed (Empty logic)** |
-| **Principled Abstention** | $< 0.10$ deviation | 0.2609 | **0.1068** | Moderate / **Passed** |
-| **Decision Flip Rate** | $< 0.15$ | **0.0000** | **0.0000** | **Passed** / **Passed** |
+| **Average Literal Count** | Low complexity (< 3.0 preferred) | 14.00 | **0.00** (All 50 concepts irrelevant) | High Complexity / **Passed (Empty logic)** |
+| **Principled Abstention** | < 0.10 deviation | 0.2609 | **0.1068** | Moderate / **Passed** |
+| **Decision Flip Rate** | < 0.15 | **0.0000** | **0.0000** | **Passed** / **Passed** |
 
 ### 4.2 Analysis and Discussion
 
