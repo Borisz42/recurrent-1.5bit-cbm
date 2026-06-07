@@ -231,9 +231,16 @@ To publish the model so others can use it:
     model.save_pretrained_merged("your-hf-username/steered-system1-1.5b", tokenizer, save_method="merged_16bit")
     model.push_to_hub_merged("your-hf-username/steered-system1-1.5b", tokenizer, save_method="merged_16bit", token="YOUR_HF_TOKEN")
     ```
-2.  **Publish System 2 Weights:** Upload `t_trm_loop.pt`, `cmr_model.pt`, and `hybrid_cbm.pt` to either:
-    *   The "Files" tab of your Hugging Face model repository.
-    *   A GitHub Release asset on your repository.
+2.  **Automated Checkpoint Release to GitHub:**
+    We provide an automated script to package and publish training checkpoints to GitHub Releases. The script zips directory structures and uploads the files to your repository:
+    ```bash
+    # Set your GitHub Access Token (PowerShell)
+    $env:GITHUB_TOKEN="your_personal_access_token"
+
+    # Automatically package and upload adapters, T-TRM outputs, and HybridCBM weights
+    python src/eval/upload_release.py --tag "v1.0.0"
+    ```
+    This zips `./adapters` to `adapters.zip`, `./t_trm_outputs` to `t_trm_outputs.zip`, detects the repository owner/name from the local git remote config, creates a release labeled `v1.0.0` (or retrieves it if it already exists), and uploads all assets (overwriting duplicates).
 3.  **Provide the Wrapper:** Provide the code in `src/` so others can clone the repository, download your weights, and execute the steering loop.
 
 ---
