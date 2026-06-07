@@ -133,7 +133,7 @@ The table below summarizes and compares the empirical results for each formal ev
 #### 4.2.1 Faithfulness and Hardening Convergence
 Both models converge with a **Discretization (Hardening) Gap of 0.00%**, proving that Polynomial Surrogate Training (PST) combined with the commitment loss drives continuous parameters exactly to their binary boundaries without inference-time distribution shift.
 
-In the **General model**, the **CUE Score of 0.9978** demonstrates that downstream decisions flow cleanly through the concept representations. In the **Coder model**, the CUE score reaches **1.1973**. This $>1.0$ score is an *artifact* of the lower CBM accuracy ($82.93\%$) compared to the BlackBox baseline ($99.66\%$), which inflates the first term ($\text{Accuracy}_{BlackBox}/\text{Accuracy}_{CBM}$) of the CUE equation. This mathematically highlights a key edge-case where CUE can be inflated if downstream logic models are under-optimized.
+In the **General model**, the **CUE Score of 0.9978** demonstrates that downstream decisions flow cleanly through the concept representations. In the **Coder model**, the CUE score reaches **1.1973**. This $>1.0$ score is an *artifact* of the lower CBM accuracy ($82.93\%$) compared to the BlackBox baseline ($99.66\%$), which inflates the first term (`Accuracy_BlackBox / Accuracy_CBM`) of the CUE equation. This mathematically highlights a key edge-case where CUE can be inflated if downstream logic models are under-optimized.
 
 #### 4.2.2 Rule Extraction and Steerability
 The extracted logical formulas reveal distinct decider topologies:
