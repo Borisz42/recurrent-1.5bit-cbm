@@ -203,6 +203,50 @@ def run_evaluation(args):
         results_file = completions_file + "_results.jsonl"
         if os.path.exists(results_file):
             print(f"Detailed results saved locally to: {results_file}")
+            passed = 0
+            failed = 0
+            errors = {}
+            with open(results_file, "r", encoding="utf-8") as rf:
+                for line in rf:
+                    try:
+                        data = json.loads(line.strip())
+                        res = data.get("result", "")
+                        if res == "passed":
+                            passed += 1
+                        else:
+                            failed += 1
+                            if "AssertionError" in res:
+                                err_type = "AssertionError"
+                            elif "SyntaxError" in res:
+                                err_type = "SyntaxError"
+                            elif "NameError" in res:
+                                err_type = "NameError"
+                            elif "TypeError" in res:
+                                err_type = "TypeError"
+                            elif "IndexError" in res:
+                                err_type = "IndexError"
+                            elif "KeyError" in res:
+                                err_type = "KeyError"
+                            elif "Timeout" in res or "timed-out" in res.lower() or "time out" in res.lower():
+                                err_type = "Timeout"
+                            else:
+                                err_type = res.split("\n")[0][:40] if "\n" in res else res[:40]
+                            errors[err_type] = errors.get(err_type, 0) + 1
+                    except Exception:
+                        pass
+            total_eval = passed + failed
+            if total_eval > 0:
+                print("\n==================================================")
+                print("           HumanEval Execution Summary            ")
+                print("==================================================")
+                print(f"Total Evaluated Tasks: {total_eval}")
+                print(f"Passed:                {passed} ({passed/total_eval*100:.2f}%)")
+                print(f"Failed:                {failed} ({failed/total_eval*100:.2f}%)")
+                if failed > 0:
+                    print("\nFailure Breakdown by Error Type:")
+                    for err_type, count in sorted(errors.items(), key=lambda x: x[1], reverse=True):
+                        print(f"  - {err_type}: {count} ({count/failed*100:.1f}% of failures)")
+                print("==================================================")
             
     except subprocess.CalledProcessError as e:
         print(f"Docker execution failed with exit code {e.returncode}")

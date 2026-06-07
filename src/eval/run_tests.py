@@ -147,6 +147,9 @@ def run_tests(args):
     correct_baseline = 0
     correct_cbm = 0
     total = 0
+    correct_baseline_per_task = [0] * n_tasks
+    correct_cbm_per_task = [0] * n_tasks
+    total_samples = 0
     all_c_probs = []
     
     with torch.no_grad():
@@ -160,14 +163,17 @@ def run_tests(args):
             _, _, c_pred, y_pred = t_trm(bx.float(), cmr_model, T_loops=3, n_steps=2, hard=True)
             correct_cbm += ((y_pred > 0.5) == by).float().sum().item()
             total += by.numel()
+            total_samples += bx.size(0)
             all_c_probs.append(c_pred)
+            
+            for task_idx in range(n_tasks):
+                correct_baseline_per_task[task_idx] += ((by_pred_base[:, task_idx] > 0.5) == by[:, task_idx]).float().sum().item()
+                correct_cbm_per_task[task_idx] += ((y_pred[:, task_idx] > 0.5) == by[:, task_idx]).float().sum().item()
             
     acc_baseline = correct_baseline / total
     acc_cbm = correct_cbm / total
     
     # Entropies
-    # H(r) proxy: since we don't map residual to discrete, we use high constant or activation variance. 
-    # For a robust calculation, we proxy H(r) using the standard deviation of the dense activations normalized.
     h_r = activations.std().item() * 10.0 # Heuristic scaling for proxy entropy
     
     all_c_probs = torch.cat(all_c_probs, dim=0)
@@ -175,8 +181,12 @@ def run_tests(args):
     
     cue_score = (acc_baseline / (acc_cbm + 1e-8)) * (1.0 - (h_c / (h_r + 1e-8)))
     
-    print(f"Accuracy (BlackBox): {acc_baseline*100:.2f}%")
-    print(f"Accuracy (HybridCBM+CMR): {acc_cbm*100:.2f}%")
+    print(f"Overall Accuracy (BlackBox): {acc_baseline*100:.2f}%")
+    print(f"Overall Accuracy (HybridCBM+CMR): {acc_cbm*100:.2f}%")
+    for task_idx in range(n_tasks):
+        acc_b_t = correct_baseline_per_task[task_idx] / total_samples
+        acc_c_t = correct_cbm_per_task[task_idx] / total_samples
+        print(f"  Task {task_idx+1} Accuracy -> BlackBox: {acc_b_t*100:.2f}%, CBM: {acc_c_t*100:.2f}%")
     print(f"Concept Entropy H(c): {h_c:.4f} | Residual Proxy Entropy H(r): {h_r:.4f}")
     print(f"CUE Score: {cue_score:.4f} (Target > 0.90)")
     
@@ -193,8 +203,14 @@ def run_tests(args):
         noise = torch.randn_like(bx) * 0.5
         bx_noisy = bx + noise
         _, _, _, y_noisy = t_trm(bx_noisy, cmr_model, T_loops=3, n_steps=2, hard=True)
-        noise_deviation = torch.abs(y_orig - y_noisy).mean().item()
-        print(f"Noise Deviation (Target < 0.2): {noise_deviation:.4f}")
+        noise_diffs = torch.abs(y_orig - y_noisy)
+        noise_deviation = noise_diffs.mean().item()
+        noise_max = noise_diffs.max().item()
+        noise_std = noise_diffs.std().item()
+        print(f"Noise Deviation stats:")
+        print(f"  Mean Deviation (Target < 0.2): {noise_deviation:.4f}")
+        print(f"  Max Deviation: {noise_max:.4f}")
+        print(f"  Std Deviation: {noise_std:.4f}")
         
         # Test B2: Predicate Dropout (Information-Monotone Verification)
         print("Information-Monotone Verification: Dropping 50% of concepts...")
@@ -205,30 +221,46 @@ def run_tests(args):
             bx, cmr_model, T_loops=3, n_steps=2, hard=True,
             intervention_mask=mask, intervention_values=vals
         )
-        drop_deviation = torch.abs(y_orig - y_dropped).mean().item()
-        print(f"Dropout Mean Deviation (Stable degradation): {drop_deviation:.4f}")
+        drop_diffs = torch.abs(y_orig - y_dropped)
+        drop_deviation = drop_diffs.mean().item()
+        drop_max = drop_diffs.max().item()
+        drop_std = drop_diffs.std().item()
+        print(f"Dropout Deviation stats:")
+        print(f"  Mean Deviation: {drop_deviation:.4f}")
+        print(f"  Max Deviation: {drop_max:.4f}")
+        print(f"  Std Deviation: {drop_std:.4f}")
         
     # 6. C. Rule Extraction
     print("\n[Test C] Rule Extraction")
     r_vars = cmr_model.get_all_rule_vars()
     rules_sym = cmr_model.get_rules_sym(r_vars)
     for task_idx in range(n_tasks):
-        print(f"Task {task_idx+1} Top Rule: {rules_sym[task_idx][0]}")
+        print(f"Task {task_idx+1} Rules:")
+        for rule_idx in range(min(5, len(rules_sym[task_idx]))):
+            print(f"  Rule {rule_idx+1}: {rules_sym[task_idx][rule_idx]}")
         
     # 7. D. Advanced Evaluation Metrics
     # Test D1: Discretization Gap
     print("\n[Test D1] Discretization (Hardening) Gap")
     correct_cbm_soft = 0
+    correct_cbm_soft_per_task = [0] * n_tasks
     with torch.no_grad():
         for bx, bc, by in dataloader:
             bx, by = bx.to(device), by.to(device)
             _, _, _, y_pred_soft = t_trm(bx.float(), cmr_model, T_loops=3, n_steps=2, hard=False)
             correct_cbm_soft += ((y_pred_soft > 0.5) == by).float().sum().item()
+            for task_idx in range(n_tasks):
+                correct_cbm_soft_per_task[task_idx] += ((y_pred_soft[:, task_idx] > 0.5) == by[:, task_idx]).float().sum().item()
+                
     acc_cbm_soft = correct_cbm_soft / total
     hardening_gap = acc_cbm_soft - acc_cbm
-    print(f"Soft Model Accuracy: {acc_cbm_soft*100:.2f}%")
-    print(f"Hardened Model Accuracy: {acc_cbm*100:.2f}%")
-    print(f"Hardening Gap: {hardening_gap*100:.2f}%")
+    print(f"Overall Soft Model Accuracy: {acc_cbm_soft*100:.2f}%")
+    print(f"Overall Hardened Model Accuracy: {acc_cbm*100:.2f}%")
+    print(f"Overall Hardening Gap: {hardening_gap*100:.2f}%")
+    for task_idx in range(n_tasks):
+        acc_s_t = correct_cbm_soft_per_task[task_idx] / total_samples
+        acc_h_t = correct_cbm_per_task[task_idx] / total_samples
+        print(f"  Task {task_idx+1} -> Soft: {acc_s_t*100:.2f}%, Hardened: {acc_h_t*100:.2f}%, Gap: {(acc_s_t - acc_h_t)*100:.2f}%")
     
     # Test D2: Concept Alignment & Quality
     print("\n[Test D2] Concept Alignment & Quality (ROC-AUC / F1)")
@@ -246,6 +278,9 @@ def run_tests(args):
     
     concept_aucs = []
     concept_f1s = []
+    
+    print(f"{'Index':<5} | {'Concept Name':<45} | {'ROC-AUC':<10} | {'F1-Score':<10}")
+    print("-" * 80)
     for c_idx in range(n_concepts):
         targets = all_c_targets[:, c_idx]
         preds = all_c_preds[:, c_idx]
@@ -253,17 +288,26 @@ def run_tests(args):
         bin_targets = (targets > 0.5).astype(int)
         bin_preds = (preds > 0.5).astype(int)
         
+        auc_val = 0.5
         if len(np.unique(bin_targets)) > 1:
             try:
-                auc = roc_auc_score(bin_targets, preds)
-                concept_aucs.append(auc)
+                auc_val = roc_auc_score(bin_targets, preds)
+                concept_aucs.append(auc_val)
             except Exception:
                 pass
-        f1 = f1_score(bin_targets, bin_preds, average="binary", zero_division=0)
-        concept_f1s.append(f1)
+        else:
+            auc_val = float('nan')
+            
+        f1_val = f1_score(bin_targets, bin_preds, average="binary", zero_division=0)
+        concept_f1s.append(f1_val)
+        
+        c_name = concept_names[c_idx]
+        auc_str = f"{auc_val:.4f}" if not np.isnan(auc_val) else "N/A"
+        print(f"{c_idx:<5} | {c_name:<45} | {auc_str:<10} | {f1_val:.4f}")
         
     avg_auc = np.mean(concept_aucs) if concept_aucs else 0.5
     avg_f1 = np.mean(concept_f1s)
+    print("-" * 80)
     print(f"Average Concept ROC-AUC: {avg_auc:.4f}")
     print(f"Average Concept F1-Score: {avg_f1:.4f}")
     
@@ -273,6 +317,7 @@ def run_tests(args):
     for rate in intervention_rates:
         correct_interv = 0
         total_interv = 0
+        correct_interv_per_task = [0] * n_tasks
         with torch.no_grad():
             for bx, bc, by in dataloader:
                 bx, bc, by = bx.to(device), bc.to(device), by.to(device)
@@ -290,8 +335,11 @@ def run_tests(args):
                 )
                 correct_interv += ((y_pred_interv > 0.5) == by).float().sum().item()
                 total_interv += by.numel()
+                for task_idx in range(n_tasks):
+                    correct_interv_per_task[task_idx] += ((y_pred_interv[:, task_idx] > 0.5) == by[:, task_idx]).float().sum().item()
         acc_interv = correct_interv / total_interv
-        print(f"Intervention Rate {rate*100:.0f}% -> Task Accuracy: {acc_interv*100:.2f}%")
+        task_acc_strs = ", ".join([f"Task {t+1}: {correct_interv_per_task[t]/total_samples*100:.2f}%" for t in range(n_tasks)])
+        print(f"Intervention Rate {rate*100:.0f}% -> Overall Accuracy: {acc_interv*100:.2f}% ({task_acc_strs})")
         
     # Test D4: Rule Coverage & Literal Count
     print("\n[Test D4] Rule Coverage & Literal Count (Interpretability)")
@@ -321,6 +369,10 @@ def run_tests(args):
         probs = counts / (counts.sum() + 1e-8)
         entropy = -np.sum(probs * np.log2(probs + 1e-8))
         print(f"Task {task_idx+1} Rule Selection Shannon Entropy: {entropy:.4f}")
+        print(f"  Rule Activation Frequencies & Formula:")
+        for rule_idx in range(cmr_model.effective_n_rules):
+            percentage = counts[rule_idx] / total_samples * 100
+            print(f"    Rule {rule_idx+1:2d} ({percentage:5.2f}%): {rules_sym[task_idx][rule_idx]}")
         
     irrelevance = r_vars[:, :, :, 2]
     is_relevant = (irrelevance < 0.5).float()

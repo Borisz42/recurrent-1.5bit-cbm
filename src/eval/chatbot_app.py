@@ -86,7 +86,15 @@ class SteeredChatbot:
         
         # Initialize concepts configuration
         emb_dim = self.model.config.hidden_size
-        self.hybrid_cbm = HybridCBM(n_dynamic=args.n_dynamic, clip_dim=args.clip_dim, emb_dim=emb_dim).to(self.device)
+        concepts_type = getattr(args, "concepts_type", "general")
+        if concepts_type == "coder":
+            from src.system1.hybrid_cbm import CODER_CONCEPTS
+            concepts = CODER_CONCEPTS
+        else:
+            from src.system1.hybrid_cbm import DEFAULT_CONCEPTS
+            concepts = DEFAULT_CONCEPTS
+            
+        self.hybrid_cbm = HybridCBM(n_dynamic=args.n_dynamic, clip_dim=args.clip_dim, emb_dim=emb_dim, concepts=concepts).to(self.device)
         if os.path.exists(args.hybrid_cbm_path):
             print(f"Loading HybridCBM weights from {args.hybrid_cbm_path}...")
             self.hybrid_cbm.load_state_dict(torch.load(args.hybrid_cbm_path, map_location=self.device))
@@ -230,6 +238,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_tokens", type=int, default=256)
     parser.add_argument("--load_in_4bit", action="store_true", default=True)
     parser.add_argument("--cli", action="store_true", help="Force CLI mode even if gradio is available")
+    parser.add_argument("--concepts_type", type=str, choices=["general", "coder"], default="general", help="Type of static concepts to use")
     
     args = parser.parse_args()
     
