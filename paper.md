@@ -47,7 +47,9 @@ While the primary model training is currently executing, the following rigorous 
 **Objective:** Verify that the HybridCBM is entirely causal and that the residual stream does not bypass the concept bottleneck.
 **Test Design:** 
 We calculate the Concept Utilization Efficiency (CUE):
+
 $$ CUE = \frac{\text{Accuracy}_{BlackBox}}{\text{Accuracy}_{CBL}} \times \left(1 - \frac{H(c)}{H(r)}\right) $$
+
 where $H(r)$ is the residual stream entropy and $H(c)$ is the concept bottleneck entropy.
 **Success Condition:** A CUE score exceeding 0.90 demonstrates that the model genuinely reasons through the audited concept space rather than memorizing statistical bypasses. Note that if CBL accuracy is extremely low, CUE score can be artificially high; hence, it must be evaluated in conjunction with absolute CBL accuracy.
 
@@ -64,14 +66,18 @@ where $H(r)$ is the residual stream entropy and $H(c)$ is the concept bottleneck
 **Objective:** Ensure that identical concepts represented in different modalities (e.g., visual grids vs. text coordinates) map to the exact same ternary bottleneck coordinates.
 **Test Design:** 
 Evaluate representations utilizing the InfoNCE alignment loss:
+
 $$ \mathcal{L}_{InfoNCE} = - \log \frac{\exp(\text{sim}(z_i^{visual}, z_i^{text})/\tau)}{\sum_j \exp(\text{sim}(z_i^{visual}, z_j^{text})/\tau)} $$
+
 **Success Condition:** The loss asymptotically approaches the lower bound across test samples, proving unified cross-modal grounding before rule selection.
 
 #### 3.2.4 Discretization (Hardening) Gap
 **Objective:** Measure the accuracy drop when switching from the continuous polynomial surrogate representation to the exact hardened discrete ternary logic circuit at inference.
 **Test Design:** 
 We compute the discretization gap $\Delta_{\text{hard}}$:
+
 $$ \Delta_{\text{hard}} = \text{Accuracy}_{\text{soft}} - \text{Accuracy}_{\text{hard}} $$
+
 **Success Condition:** A gap $\Delta_{\text{hard}} < 0.05$ at the end of training indicates that the commitment losses have successfully driven the gate parameters and routing logits to their discrete boundaries, eliminating distribution shift at inference.
 
 #### 3.2.5 Concept Alignment and Quality
@@ -89,10 +95,15 @@ We evaluate downstream task accuracy under varying concept intervention rates $p
 #### 3.2.7 Rule Coverage & Complexity
 **Objective:** Evaluate the interpretability and utilization efficiency of the learned rule memory in the CMR decider.
 **Test Design:** 
+
 1. **Rule Coverage:** Compute the Shannon entropy of the chosen rule index distribution across the dataset:
-$$ H(\text{Rules}) = -\sum_{i=1}^{R} P(r_i) \log_2 P(r_i) $$
+   
+   $$ H(\text{Rules}) = -\sum_{i=1}^{R} P(r_i) \log_2 P(r_i) $$
+   
 2. **Complexity:** Compute the average literal count (number of active/relevant concepts) per rule:
-$$ \text{Literal Count} = \frac{1}{R} \sum_{i=1}^{R} \sum_{j=1}^{C} \mathbb{I}(\text{irrelevance}_{i, j} < 0.5) $$
+   
+   $$ \text{Literal Count} = \frac{1}{R} \sum_{i=1}^{R} \sum_{j=1}^{C} \mathbb{I}(\text{irrelevance}_{i, j} < 0.5) $$
+   
 **Success Condition:** A balanced rule entropy indicates rules are broadly distributed, while a low literal count (e.g., $<3.0$ active concepts per rule) ensures the rules remain readable and human-interpretable.
 
 ## 4. Empirical Evaluation and Testing Results
