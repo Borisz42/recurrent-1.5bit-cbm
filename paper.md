@@ -18,6 +18,11 @@ Modern deep learning architectures suffer from a fundamental lack of interpretab
 **Rationale:** Embedding recursion internally within the autoregressive generation disrupts causal masking and gradient propagation. The decoupled T-TRM operates externally on post-hoc extracted intermediate representations (Layer 14 activations), recursively refining a ternary concept state and generating a continuous steering vector projected back into the base model.
 **Expected Outcome:** Stable gradient propagation and parallel execution, avoiding the representation collapse associated with internal autoregressive loops.
 
+### 2.2.1 Active System 2 Steering via Activation Patching
+**Mechanism:** To enforce continuous oversight from System 2 during the token-by-token generation of System 1, we implemented an `ActivationSteeringHook`. This PyTorch forward hook is dynamically attached to Layer 14 of the Causal LLM. 
+**Execution:** During the prefill phase, the hook pools the sequence representations to compute the context state. During the autoregressive generation phase, the hook intercepts the hidden state of each new token, maintains an exponential moving average (EMA) context, and queries the T-TRM loop. The resulting System 2 steering vector $y$ is injected directly back into the generation stream: $h_{steered} = h_{original} + \alpha \cdot y$.
+**Expected Outcome:** System 2 actively steers the System 1 decoding process on the fly without breaking native, highly-optimized generation loops (like HuggingFace's `model.generate()`), ensuring real-time logical constraint enforcement.
+
 ### 2.3 Hybrid Concept Bottleneck Model (HybridCBM) & ConceptNet Harvester
 **Tool:** `conceptnet_harvester.py` (Custom API Harvester) & HybridCBM.
 **Rationale:** Standard concept bottlenecks suffer from a "completeness penalty" when predefined concepts fail to capture all variance. We utilize a dual-segment bottleneck: a Static Concept Bank populated by high-confidence domain logic (harvested directly via the ConceptNet API utility) and a Dynamic Concept Bank capturing residual non-linear variance.
