@@ -11,6 +11,7 @@ from peft import PeftModel
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from src.system1.hook_extractor import ActivationHookExtractor
+from src.system1.steering_hook import ActivationSteeringHook
 from src.system1.hybrid_cbm import HybridCBM
 from src.cmr.model import CMR, InputTypes
 from src.t_trm.loop import TTRMLoop
@@ -129,50 +130,50 @@ class SteeredChatbot:
         self.t_trm.eval()
         self.cmr_model.eval()
 
+        # Initialize the steering hook
+        self.steering_hook = ActivationSteeringHook(
+            model=self.model,
+            layer_path=self.target_layer,
+            t_trm=self.t_trm,
+            cmr_model=self.cmr_model,
+            alpha=args.steering_alpha
+        )
+
     def generate_and_reason(self, prompt):
         # Format instruction template
         formatted_prompt = f"Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{prompt}\n\n### Response:\n"
         inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.model.device)
         
-        # 1. Run forward pass with hooks to capture activations on the prompt
-        self.extractor.clear()
-        with self.extractor:
-            with torch.no_grad():
-                _ = self.model(**inputs)
-                
-        # 2. Get Layer 14 activations
-        raw_activations = self.extractor.extracted_activations[0] # [1, seq_len, emb_dim]
-        # Mean pool over sequence dimension to extract a single context representation
-        x = raw_activations.mean(dim=1) # [1, emb_dim]
+        self.steering_hook.clear()
         
-        # 3. Evaluate concept activations and CMR rules via T-TRM Loop
-        with torch.no_grad():
-            _, _, c_pred, y_pred = self.t_trm(x.float(), self.cmr_model, T_loops=3, n_steps=2, hard=True)
-            c_probs = c_pred[0].cpu().numpy() # [n_concepts]
-            y_probs = y_pred[0].cpu().numpy() # [n_tasks]
-            
+        # 1. Generate the response text from System 1 dynamically steered by System 2
+        with self.steering_hook:
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=self.args.max_tokens,
+                    temperature=0.7,
+                    do_sample=True
+                )
+                
+        # 2. Extract final active concepts and rules from the generation history
+        if self.steering_hook.history:
+            last_hist = self.steering_hook.history[-1]
+            c_probs = last_hist["c_probs"]
+            y_probs = last_hist["y_probs"]
+        else:
+            c_probs = [0.0] * len(self.concept_names)
+            y_probs = [0.0] * 2  # default tasks
+
         # Map concepts to printable values
         concept_status = {name: float(prob) for name, prob in zip(self.concept_names, c_probs)}
         
-        # Get active rules (simplification for visualization)
+        # Get active rules
         active_rules = []
-        rule_vars = self.cmr_model.get_all_rule_vars() # [n_tasks, n_rules, n_concepts, 3]
-        for task_idx in range(y_probs.shape[0]):
+        for task_idx in range(len(y_probs)):
             task_status = "ACTIVE" if y_probs[task_idx] > 0.5 else "INACTIVE"
             active_rules.append(f"Task {task_idx+1} ({task_status}):")
-            
-            # Simple demonstration of CMR rule format
-            # In a complete implementation, we look at the weight selector values
             active_rules.append(f"  Applied logic constraints over concepts to decide status.")
-        
-        # 4. Generate the actual response text from System 1
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=self.args.max_tokens,
-                temperature=0.7,
-                do_sample=True
-            )
         
         response_text = self.tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
         return response_text, concept_status, "\n".join(active_rules)
@@ -239,6 +240,7 @@ if __name__ == "__main__":
     parser.add_argument("--load_in_4bit", action="store_true", default=True)
     parser.add_argument("--cli", action="store_true", help="Force CLI mode even if gradio is available")
     parser.add_argument("--concepts_type", type=str, choices=["general", "coder"], default="general", help="Type of static concepts to use")
+    parser.add_argument("--steering_alpha", type=float, default=1.0, help="Strength of the System 2 steering intervention.")
     
     args = parser.parse_args()
     
