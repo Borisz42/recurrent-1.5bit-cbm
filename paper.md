@@ -145,5 +145,21 @@ For the Coder version, the neural rule selector deterministically activates Rule
 #### 4.2.3 Concept Tracking & Alignment
 The **Average Concept F1-Score** improves significantly from **0.2857 (General)** to **0.6545 (Coder)**. Specifically, static coder concepts show high alignment (e.g., `variable scoping` at **0.9492 F1**, `input validation` at **0.9005 F1**, and `syntax validation` at **0.8606 F1**), verifying that the HybridCBM effectively tracks domain-specific static coding logic. However, several dynamic concepts (e.g., `dynamic_0`, `dynamic_2`, `dynamic_3`) exhibit $0.0000$ F1-scores, dragging down the average. ROC-AUC is bounded at $0.5000$ due to discrete thresholding. Future training runs will adjust correlation losses to align the dynamic features.
 
+### 4.3 Generative Code Evaluation (HumanEval Benchmark)
+To assess the generation engine (System 1) directly, we evaluated both the base `Qwen2.5-Coder-1.5B-Instruct` model (in 4-bit precision) and the Supervised Fine-Tuned (SFT) model on the HumanEval code completion benchmark. The evaluations were conducted in a secure, isolated Docker container environment to prevent arbitrary code execution vulnerabilities.
+
+| Model Variant | Prompting Mode | Quantization | Pass@1 Score |
+| :--- | :--- | :--- | :--- |
+| **Qwen2.5-Coder-1.5B-Instruct (Official)** | Instruct Chat Template | None (FP16/BF16) | **70.70%** |
+| **Base Model (Local Evaluation)** | Raw Code Completion (Base Style) | 4-bit (`bnb-4bit`) | **25.61%** |
+| **SFT Fine-Tuned Model (Local Evaluation)** | Raw Code Completion (Base Style) | 4-bit (`bnb-4bit`) | **29.88%** |
+
+#### Discussion of HumanEval Results and Prompting Discrepancy
+Our local Dockerized evaluations show a significant discrepancy between the official benchmark score (**70.70%**) and our local base/SFT runs (**25.61%** and **29.88%** respectively). This performance gap is explained by two primary factors:
+1. **Instruction-Aligning vs. Raw Code Completion:** The official **70.7%** score is achieved by wrapping the prompt in Qwen's specific Chat/Instruct templates (e.g., `<|im_start|>user...<|im_end|>`), allowing the instruction-aligned model to output the function body within standard conversational logic. Conversely, our local script `run_coder_eval.py` prompts the model with raw code prefix blocks (base-style completions). When an instruct-aligned model is prompted with raw code directly, its generation logic breaks down, causing it to generate conversational explanations or repeat instructions.
+2. **Quantization Penalty:** Quantizing a very small model (1.5B parameters) to 4-bit precision degrades its semantic coherence on complex logical synthesis tasks compared to full 16-bit precision.
+
+Supervised Fine-Tuning (SFT) on the Python instruction dataset adapted the model specifically to the raw prefix completion format, restoring and boosting the Pass@1 score from **25.61%** to **29.88%**. However, both remain constrained by the non-chat prompting format, highlighting the criticality of prompt-template alignment in small-scale code generation models.
+
 ## 5. Conclusion
 By fully decoupling the sequence generation engine from the recursive monitoring loop, and bridging them via a verifiable Hybrid Concept Bottleneck, this architecture addresses the fundamental structural limitations of traditional LLMs. The formalized testing matrix outlined in this paper ensures that, post-training, the model will provide verifiable, deterministic logic guarantees while remaining deployable on consumer-grade hardware.

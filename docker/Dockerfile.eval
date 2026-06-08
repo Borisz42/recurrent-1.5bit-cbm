@@ -5,8 +5,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install human-eval directly from the official repository
-RUN pip install --no-cache-dir git+https://github.com/openai/human-eval.git
+# Clone and install human-eval with fixed entrypoint and data path
+RUN git clone https://github.com/openai/human-eval.git /tmp/human-eval && \
+    sed -i 's/human_eval.evaluate_functional_correctness/human_eval.evaluate_functional_correctness:main/g' /tmp/human-eval/setup.py && \
+    sed -i 's/"..", "data", "HumanEval.jsonl.gz"/"data", "HumanEval.jsonl.gz"/g' /tmp/human-eval/human_eval/data.py && \
+    pip install --no-cache-dir /tmp/human-eval && \
+    mkdir -p /usr/local/lib/python3.10/site-packages/human_eval/data && \
+    cp /tmp/human-eval/data/HumanEval.jsonl.gz /usr/local/lib/python3.10/site-packages/human_eval/data/ && \
+    rm -rf /tmp/human-eval
 
 # Set environment variable to enable code execution safely within the container
 ENV ALLOW_CODE_EXECUTION=1
